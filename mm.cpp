@@ -82,26 +82,29 @@ void gemm_base(float C[NI*NJ], float A[NI*NK], float B[NK*NJ], float alpha, floa
 }
 
 /* Main computational kernel: with tiling optimization. */
-static
-void gemm_tile(float C[NI*NJ], float A[NI*NK], float B[NK*NJ], float alpha, float beta)
+static void gemm_tile(float C[NI*NJ], float A[NI*NK], float B[NK*NJ], float alpha, float beta)
 {
-  int i, j, k;
+    int i, j, k, i_blk, j_blk, k_blk;
+    const int BLOCK_SIZE = 16; //block size (can change based on system specs)
 
-// => Form C := alpha*A*B + beta*C,
-//A is NIxNK
-//B is NKxNJ
-//C is NIxNJ
-  for (i = 0; i < NI; i++) {
-    for (j = 0; j < NJ; j++) {
-      C[i*NJ+j] *= beta;
+    for (i_blk = 0; i_blk < NI; i_blk += BLOCK_SIZE) {
+        for (j_blk = 0; j_blk < NJ; j_blk += BLOCK_SIZE) {
+            for (k_blk = 0; k_blk < NK; k_blk += BLOCK_SIZE) {
+                // Process a block of matrix C
+                for (i = i_blk; i < i_blk + BLOCK_SIZE && i < NI; i++) {
+                    for (j = j_blk; j < j_blk + BLOCK_SIZE && j < NJ; j++) {
+                        C[i*NJ+j] *= beta;
+                        for (k = k_blk; k < k_blk + BLOCK_SIZE && k < NK; k++) {
+                            C[i*NJ+j] += alpha * A[i*NK+k] * B[k*NJ+j];
+                        }
+                    }
+                }
+            }
+        }
     }
-    for (j = 0; j < NJ; j++) {
-      for (k = 0; k < NK; ++k) {
-	C[i*NJ+j] += alpha * A[i*NK+k] * B[k*NJ+j];
-      }
-    }
-  }
 }
+//three new loop variables i_blk, j_blk, and k_blk, which represent the starting indices of the current block.
+
 
 /* Main computational kernel: with tiling and simd optimizations. */
 static
